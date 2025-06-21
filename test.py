@@ -43,30 +43,49 @@ async def login(p):
 
     return context, page
 
+async def extract_posts(page):
+    await page.wait_for_selector(".work-thumbnail", timeout=10000)
+    items = page.locator(".work-thumbnail")
+    count = await items.count()
+    print(f"✅ 本页共有 {count} 个收藏作品")
+
+    results = []
+
+    for i in range(count):
+        item = items.nth(i).locator("a.thumbnail")
+        href = await item.get_attribute("href")
+        title = await item.locator(".title").text_content()
+        results.append({
+            "title": title.strip() if title else "(无标题)",
+            "url": href.strip() if href else "#"
+        })
+
+    return results
+
+
+async def get_total_pages(page):
+    await page.wait_for_selector("ul.pagination", timeout=10000)
+    li_count = await page.locator(".pagination > li").count()
+    page_count = li_count - 2
+
+    return page_count
+
+
 async def process_fav(page):
     await page.click("#userNav")
     print("🔄 正在获取收藏列表..")
     await page.locator("#favLi").click(timeout=10000)
 
-    await page.wait_for_selector("ul.pagination", timeout=10000)
-
-    # 选中所有 <li> 中含有 <a href=...page=数字> 的元素
-    # locator = page.locator('ul.pagination li >> a[href*="page="]')
-    # page_count = await locator.count()
-    # print(f"共 {page_count} 页（来自分页链接）")
-
-    li_count = await page.locator(".pagination > li").count()
-    page_count = li_count - 2
+    page_count = await get_total_pages(page)
     print(f"✅ 收藏夹共有 {page_count} 页")
 
     for page_num in range(1, page_count+1):
         url = f"http://www.cnu.cc/users/favorites?page={page_num}"
         print(f"🔄 正在访问第 {page_num} 页: {url}")
         await page.goto(url)
-
-
-
-
+        results = await extract_posts(page)
+        for res in results:
+            print(res)
 
 
 async def main():
@@ -75,6 +94,7 @@ async def main():
         if context and page:
             await process_fav(page)
 
+            print("🍀 测试结束")
 
             await asyncio.Event().wait()  # 保持窗口打开
 
