@@ -1,6 +1,10 @@
 import asyncio
+import json
 import os.path
+from os.path import splitext
+
 from playwright.async_api import async_playwright
+import aiohttp
 
 main_page = "http://cnu.cc"
 login_page = "http://www.cnu.cc/login"
@@ -8,8 +12,9 @@ fav_page = "http://www.cnu.cc/users/favorites"
 fav_subpage = "http://www.cnu.cc/users/favorites?page=1"
 wechat_login = "http://www.cnu.cc/auth/wechat-login/%7BisLogin%7D"
 
-
 cookie_file = "auth_storage.json"
+
+desktop_path = os.path.join(os.path.expanduser('~'), 'Desktop', 'CNU')
 
 async def login(p):
     browser = await p.chromium.launch(headless=False)
@@ -43,6 +48,7 @@ async def login(p):
 
     return context, page
 
+
 async def extract_posts(page):
     await page.wait_for_selector(".work-thumbnail", timeout=10000)
     items = page.locator(".work-thumbnail")
@@ -70,6 +76,51 @@ async def get_total_pages(page):
 
     return page_count
 
+async def save_images_from_posts(page, post_url, title):
+    print(f"📥 开始处理：{title} - {post_url}")
+    await page.goto(post_url)
+
+    await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+    await asyncio.sleep(2)
+
+    img_json = await page.evaluate("document.getElementById('imgs_json')?.innerText")
+    if not img_json:
+        print("⚠️ 无法找到图片 JSON 数据，跳过..")
+        return
+
+    try:
+        img_list = json.loads(img_json)
+    except Exception as e:
+        print(f"❌ JSON 解码失败: {e}")
+        return
+
+    save_path = os.path.join(desktop_path, title)
+    # print(save_path)
+    os.makedirs(save_path, exist_ok=True)
+
+    async with aiohttp.ClientSession() as session:
+        for idx, img in enumerate(img_list):
+            img_path = img.get("img")
+            if not img_path:
+                print(f"skipping {idx}")
+                continue
+            img_url = f"http://imgoss.cnu.cc/{img_path}?x-oss-process=style/content"
+            ext = os.path.splitext(img_path)[-1].split("?")[0] or ".jpg"
+            file_name = os.path.join(save_path, f"{idx + 1}{ext}")
+
+            try:
+                async with session.get(img_url) as resp:
+                    if resp.status == 200:
+                        with open(file_name, 'wb') as f:
+                            f.write(await resp.read())
+                        print(f"✅ 已保存：{file_name}")
+                    else:
+                        print(f"❌ 图片请求失败: {img_url}")
+            except Exception as e:
+                print(f"❌ 下载异常: {e}")
+
+        print(f"🎉 完成：{title}")
+
 
 async def process_fav(page):
     await page.click("#userNav")
@@ -83,9 +134,17 @@ async def process_fav(page):
         url = f"http://www.cnu.cc/users/favorites?page={page_num}"
         print(f"🔄 正在访问第 {page_num} 页: {url}")
         await page.goto(url)
-        results = await extract_posts(page)
-        for res in results:
-            print(res)
+        posts_list = await extract_posts(page)
+        for post in posts_list:
+            # print(post)
+            post_title = post["title".replace("/", "_").replace("\\", "_")]
+            post_url = post["url"]
+
+            if not post_url.startswith("http"):
+                post_url = "http://www.cnu.cc" + post_url
+            await save_images_from_posts(page, post_url, post_title)
+
+            # exit(0)
 
 
 async def main():
@@ -97,5 +156,6 @@ async def main():
             print("🍀 测试结束")
 
             await asyncio.Event().wait()  # 保持窗口打开
+
 
 asyncio.run(main())
