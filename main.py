@@ -1,3 +1,5 @@
+# conda env create -f environment.yml
+
 import asyncio
 import json
 import os.path
@@ -17,7 +19,7 @@ cookie_file = "auth_storage.json"
 desktop_path = os.path.join(os.path.expanduser('~'), 'Desktop', 'CNU')
 
 async def login(p):
-    browser = await p.chromium.launch(headless=False)
+    browser = await p.chromium.launch(headless=True)
 
     if os.path.exists(cookie_file):
         context = await browser.new_context(locale="zh-CN", storage_state=cookie_file)
@@ -28,21 +30,22 @@ async def login(p):
 
     page = await context.new_page()
     await page.goto(main_page)
-    if not await page.locator("#userNav").is_visible(timeout=10000):
+
+    try:
+        await page.wait_for_selector("#userNav", timeout=10000, state="visible")
+    except:
         print("🔒 Cookie 无效或未登录，进入扫码登录流程..")
         await page.goto(wechat_login)
 
         try:
-            await page.wait_for_selector("#userNav", timeout=120000)
+            await page.wait_for_selector("#userNav", timeout=120000, state="visible")
             print("✅ 登录成功！保存 Cookie...")
             await context.storage_state(path=cookie_file)
             await page.click("#userNav")
-
         except TimeoutError:
             print("❌ 登录超时，未能完成扫码")
             await browser.close()
             return None, None
-
     else:
         print("✅ 已登录")
 
