@@ -99,6 +99,11 @@ async def save_images_from_posts(page, post_url, title):
 
     save_path = os.path.join(desktop_path, title)
     # print(save_path)
+
+    if os.path.exists(save_path):
+        print("🪼 {save_path} 已存在.")
+        return
+
     os.makedirs(save_path, exist_ok=True)
 
     async with aiohttp.ClientSession() as session:
