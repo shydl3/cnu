@@ -1,4 +1,5 @@
 # conda env create -f environment.yml
+# playwright install
 
 import asyncio
 import json
@@ -19,7 +20,7 @@ cookie_file = "auth_storage.json"
 desktop_path = os.path.join(os.path.expanduser('~'), 'Desktop', 'CNU')
 
 async def login(p):
-    browser = await p.chromium.launch(headless=True)
+    browser = await p.chromium.launch(headless=False)
 
     if os.path.exists(cookie_file):
         context = await browser.new_context(locale="zh-CN", storage_state=cookie_file)
@@ -80,7 +81,7 @@ async def get_total_pages(page):
     return page_count
 
 async def save_images_from_posts(page, post_url, title):
-    print(f"📥 开始处理：{title} - {post_url}")
+    print(f"\n📥 开始处理：{title} - {post_url}")
     await page.goto(post_url)
 
     await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
@@ -101,7 +102,7 @@ async def save_images_from_posts(page, post_url, title):
     # print(save_path)
 
     if os.path.exists(save_path):
-        print("🪼 {save_path} 已存在.")
+        print(f"🪼 {save_path} 已存在.")
         return
 
     os.makedirs(save_path, exist_ok=True)
@@ -161,7 +162,7 @@ async def main():
         if context and page:
             await process_fav(page)
 
-            print("🍀 测试结束")
+            print("\n🍀 测试结束")
 
             await asyncio.Event().wait()  # 保持窗口打开
 
